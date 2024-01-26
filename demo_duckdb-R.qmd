@@ -1,0 +1,96 @@
+---
+title: "DuckDB - météo"
+execute:
+  warning: false
+---
+
+## A - Initialisation et paramètres d'interrogation
+
+```{}
+```
+
+On ouvre une session DuckDB "en mémoire" et précise la station à consulter ainsi que l'amplitude temporelle.
+
+```{r}
+#| output: false
+library(duckdb)
+
+con <- dbConnect(duckdb())
+
+dbExecute(con, 'load httpfs') # extension qui permet d'accéder à des fichiers en https 
+
+station = 'aston'  # recherche possible à partir d'une partie du nom de la station météo
+dept    = '09'
+laps    = 10  # températures des 'laps' derniers jours
+```
+
+## B - Chargement des données
+
+Exécution de la requête sous forme d'une procédure.
+
+```{r}
+#| output: false
+library(stringr)
+
+dbExecute(con,"
+PREPARE EVOL_STATION AS                      
+  SELECT NOM_USUEL, ALTI, strptime(AAAAMMJJHH::varchar,'%Y%m%d%H') AS horaire, T
+  FROM read_csv_auto('https://object.files.data.gouv.fr/meteofrance/data/synchro_ftp/BASE/HOR/H_' 
+  || ? || '_latest-2023-2024.csv.gz')
+  WHERE lower(NOM_USUEL) like '%' || lower(?) || '%' 
+  AND date_diff('days', horaire, current_date) <= ? AND T IS NOT NULL
+  ORDER BY horaire DESC
+")
+
+meteo = dbGetQuery(con, str_glue("EXECUTE EVOL_STATION('{dept}','{station}',{laps})"))
+
+stationl = str_to_title(meteo$NOM_USUEL[[1]])  # nom complet de la station météo
+```
+
+```{r}
+head(meteo, n = 10)
+```
+
+## C - Graphique avec ggplot2
+
+En peu de lignes, ggplot réalise un graphique assez moche :
+
+```{r fig.width = 9}
+library(ggplot2)
+
+p <- ggplot(data = meteo, aes(x = horaire, y = T))
+
+p + geom_line(color = "orange") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#999999") +
+  ggtitle(str_glue("Courbe de température à {stationl} (°C)")) +
+  ylab("") + xlab("")
+```
+
+## D - Graphique avec Observable Plot
+
+```{r}
+# Transfert d'objets de R vers Observable 
+ojs_define(data    = meteo)
+ojs_define(station = stationl)
+ojs_define(laps    = laps)
+```
+
+Avec assez peu de lignes, Plot réalise un graphique impeccable :
+
+```{ojs}
+Plot.plot({
+  width: 800,
+  marginTop: 50, marginRight: 30,
+  x: {label: '', grid: true, tickSize: 0,
+      tickFormat: d => d.toLocaleString({}, {month: 'short', day: 'numeric', year: 'numeric'})
+  },
+  y : {label: '', grid: true, tickSize: 0, tickFormat: d => d + ' °C'},
+  marks: [
+    Plot.ruleY([0], {stroke: "grey"}),
+    Plot.line(transpose(data).map(d => {return {horaire: new Date(d.horaire), T: d.T}}), 
+              {x: 'horaire', y: 'T', stroke: 'hotpink', 'strokeWidth': 2, curve: 'cardinal' }),
+    Plot.text([`Températures de ces ${laps} derniers jours à ${station}`], 
+              {frameAnchor: 'Top', dy: -25, fontSize: 16, fontWeight: 700})
+  ]
+})
+```
