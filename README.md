@@ -1,7 +1,7 @@
 # Avec DuckDB, gavez-vous d'open data !
 Événement de [Toulouse Dataviz](https://toulouse-dataviz.fr/evenements) - 25 janvier 2024
 
-Vous trouverez dans ce dépôt les ressources présentées lors de cette conférence :
+Vous trouverez dans ce dépôt les ressources présentées lors de cette [conférence](https://www.youtube.com/watch?v=ajo0VBXT6ho) :
 - diaporama
 - exemples de code
 
